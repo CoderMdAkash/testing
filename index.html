@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Voice Contact Form</title>
+    <style>
+        button {
+            margin: 10px;
+            padding: 10px;
+            font-size: 16px;
+        }
+
+        #startRecording {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+        }
+
+        #stopRecording {
+            background-color: #f44336;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h2>Contact Form</h2>
+
+    <form id="contactForm" method="POST" enctype="multipart/form-data">
+        @csrf
+        <input type="text" name="name" placeholder="Your name" required><br>
+        <input type="email" name="email" placeholder="Your email" required><br><br>
+
+        <button type="button" id="startRecording" title="Start Recording">
+            🎤
+        </button>
+
+        <button type="button" id="stopRecording" title="Stop Recording">
+            Stop
+        </button><br><br>
+
+        <audio id="audioPlayback" controls></audio><br><br>
+
+        <button type="submit">Send</button>
+    </form>
+
+    <script>
+        let mediaRecorder;
+        let audioBlob;
+
+        document.getElementById('startRecording').onclick = async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                const chunks = [];
+
+                mediaRecorder.ondataavailable = e => chunks.push(e.data);
+                mediaRecorder.onstop = () => {
+                    audioBlob = new Blob(chunks, { type: 'audio/webm' });
+                    const audioURL = URL.createObjectURL(audioBlob);
+                    document.getElementById('audioPlayback').src = audioURL;
+                };
+
+                mediaRecorder.start();
+                alert("Recording started...");
+            } catch (err) {
+                alert("Microphone access denied.");
+                console.error(err);
+            }
+        };
+
+        document.getElementById('stopRecording').onclick = () => {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                alert("Recording stopped.");
+            }
+        };
+
+        document.getElementById('contactForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const formData = new FormData(form);
+            if (audioBlob) {
+                formData.append('voice_message', audioBlob, 'voice_message.webm');
+            }
+
+            const response = await fetch("{{ route('contact.submit') }}", {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+            alert(data.message);
+        };
+
+        navigator.permissions.query({name: 'microphone'}).then(console.log);
+    </script>
+</body>
+</html>
